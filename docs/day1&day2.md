@@ -357,7 +357,7 @@ let c = createLabel(Math.random() ? "hello" : 42);
 ```typescript
 //我们约束：T必须包含一个名为message的属性,该类型返回message的类型
 //其实完成了两件事：一件事是对传入T的约束，一件事是对自身类型的控制
-type MessageOf<T extends { message: unknown }> = T["message"];
+type MessageOf<T extends { message: unknown }> =? T["message"] : never;
  
 interface Email {
   message: string;
@@ -365,8 +365,266 @@ interface Email {
 
 //EmailMessageContents : string
 type EmailMessageContents = MessageOf<Email>;
+
+interface Dog {
+  bark(): void;
+}
+
+//DogMessageContents : never 因为Dog接口中未包含message这个属性
+type DogMessageContents = MessageOf<Dog>;
+
 ```
 
+另外一个例子，实现一下扁平化数组的功能
+
+```typescript
+type Flatten<T> = T extends any[] ? T[number] : T;
+ 
+// 当传进去是一个数组类型时，返回数组元素类型
+type Str = Flatten<string[]>;
+
+// 当传进去一个元素类型是，返回本身
+type Num = Flatten<number>;
+```
+
+### 在条件类型中推断
+
+另外，ts还给我们提供了一种用法
+
+```typescript
+type Flatten<Type> = Type extends Array<infer Item> ? Item : Type;
+```
+
+使用 `infer` 声明性地引入了一个新的泛型类型变量 Item，而不是指定如何在 true 分支中检索 T 的元素类型。
+
+这样子我们可以使用infer编写一些有用的类型别名，例如，提取函数类型中的返回类型
+
+```typescript
+type GetReturnType<Type> = Type extends (...args: never[]) => infer Return
+  ? Return
+  : never;
+```
+
+当存在多个重载函数时，对最后一个函数进行推导
+
+```typescript
+declare function stringOrNum(x: string): number;
+declare function stringOrNum(x: string | number): string | number;
+declare function stringOrNum(x: number): string;
+
+//T1 : string
+type T1 = ReturnType<typeof stringOrNum>;
+```
+
+### 分配条件类型
+
+```typescript
+type ToArray<Type> = Type extends any ? Type[] : never;
+```
+
+有这么一种情况，当Type传进一个联合类型 
+
+```typescript
+type StrArrOrNumArr = ToArray<string | number>;
+```
+
+`StrArrOrNumArr` 得到的结果是 string[] | number[]
+
+如果我们想变成 (string | number)[] 类型，可以用方括号将 extends 关键字的每一边包围起来。
+
+```typescript
+type ToArrayNonDist<Type> = [Type] extends [any] ? Type[] : never;
+
+//StrArrOrNumArr : (string | number)[]
+type StrArrOrNumArr = ToArrayNonDist<string | number>;
+```
+
+## （六）映射类型
+
+有时候我们不希望返回本身，有时候希望可以改变成为一种类型。
+
+映射类型是一种泛型类型，它使用 PropertyKeys (通常通过 keyof 创建)的联合来迭代键以创建类型:
+
+```typescript
+type OptionsFlags<Type> = {
+  [Property in keyof Type]: boolean;
+};
+
+type FeatureFlags = {
+  darkMode: () => void;
+  newUserProfile: () => void;
+};
+
+//将所有属性均变为boolean类型
+type FeatureOptions = OptionsFlags<FeatureFlags>;
+/*
+type FeatureOptions = {
+    darkMode: boolean;
+    newUserProfile: boolean;
+}
+*/
+```
+
+### 映射修饰符
+
+在映射过程中可以使用两个额外的修饰符: `readonly` 和`?` ，它们分别影响可变性和可选性。
+
+另外，可以通过使用 `-` 或 `+` 作为前缀来删除或添加这些修饰符。如果没有添加前缀，则假定为 + 。
+
+```typescript
+//去除readonly
+type CreateMutable<Type> = {
+  -readonly [Property in keyof Type]: Type[Property];
+};
+
+type LockedAccount = {
+  readonly id: string;
+  readonly name: string;
+};
+
+type UnlockedAccount = CreateMutable<LockedAccount>;
+/*
+UnlockedAccount : {
+    id: string;
+    name: string;
+}
+*/
+```
+
+```typescript
+//去除可选性质
+type Concrete<Type> = {
+  [Property in keyof Type]-?: Type[Property];
+};
+ 
+type MaybeUser = {
+  id: string;
+  name?: string;
+  age?: number;
+};
+ 
+type User = Concrete<MaybeUser>;
+/*
+  type User = {
+      id: string;
+      name: string;
+      age: number;
+  }
+*/
+```
+
+### 使用as对Key重新映射
+
+可以使用映射类型中的 as 子句重新映射映射类型的键，例如对key的名称进行更改：
+
+```typescript
+//注意使用反引号
+type Getters<Type> = {
+    [Property in keyof Type as /`get${Capitalize<string & Property>}/`]: () => Type[Property]
+};
+
+interface Person {
+    name: string;
+    age: number;
+    location: string;
+}
+ 
+type LazyPerson = Getters<Person>;
+/*    
+type LazyPerson = {
+    getName: () => string;
+    getAge: () => number;
+    getLocation: () => string;
+}
+*/
+```
+
+另一个例子
+
+```typescript
+//指定Type中属性kind的值作为新的属性名
+type EventConfig<Events extends { kind: string }> = {
+    [E in Events as E["kind"]]: (event: E) => void;
+}
+ 
+type SquareEvent = { kind: "square", x: number, y: number };
+type CircleEvent = { kind: "circle", radius: number };
+ 
+type Config = EventConfig<SquareEvent | CircleEvent>
+/*
+type Config = {
+    square: (event: SquareEvent) => void;
+    circle: (event: CircleEvent) => void;
+}
+*/
+```
+
+## （七）模板文字类型
+
+模板文字类型建立在字符串文字类型之上，并且能够通过联合扩展成许多字符串。
+
+与 JavaScript 中的模板字符串具有相同的语法，但是用于类型位置。当与具体文本类型一起使用时，模板文本通过连接内容生成一个新的字符串文本类型。
+
+```typescript
+type EmailLocaleIDs = "welcome_email" | "email_heading";
+type FooterLocaleIDs = "footer_title" | "footer_sendoff";
+ 
+//type AllLocaleIDs = "welcome_email_id" | "email_heading_id" | "footer_title_id" | "footer_sendoff_id"
+type AllLocaleIDs = `${EmailLocaleIDs | FooterLocaleIDs}_id`;
 
 
-未完待续...
+//对于模板文字中的每个插值位置，联合是十字乘:
+type Lang = "en" | "ja" | "pt";
+
+//type LocaleMessageIDs = "en_welcome_email_id" | "en_email_heading_id" | "en_footer_title_id" | "en_footer_sendoff_id" | "ja_welcome_email_id" | "ja_email_heading_id" | "ja_footer_title_id" | "ja_footer_sendoff_id" | "pt_welcome_email_id" | "pt_email_heading_id" | "pt_footer_title_id" | "pt_footer_sendoff_id"
+type LocaleMessageIDs = `${Lang}_${AllLocaleIDs}`;
+```
+
+### 类型字符串联合
+
+将字符串和类型进行联合使用，将碰撞出不一样的火花。
+
+```typescript
+//该类型存在一个on方法，名称为每一个属性名+Changed
+type PropEventSource<Type> = {
+  on(
+    eventName: `${string & keyof Type}Changed`,
+    callback: (newValue: Type[Key]) => void
+  ): void;
+};
+
+//我们声明一个方法，将原类型和上面的类型合并(&)起来
+declare function makeWatchedObject<Type>(
+  obj: Type
+): Type & PropEventSource<Type>;
+
+//创建一个实例
+const person = makeWatchedObject({
+  firstName: "Saoirse",
+  lastName: "Ronan",
+  age: 26
+});
+
+person.on("firstNameChanged", () => {});
+```
+
+这样子我们可以在使用时，给予我们代码提示，这是我们希望的。
+
+![image-20211120162107337](https://i.loli.net/2021/11/20/F8GZalAYSvCUWOV.png)
+
+![image-20211120162126468](https://i.loli.net/2021/11/20/7M6UJLVSpY4HgkN.png)
+
+### 内部字符串操作类型
+
+```typescript
+Uppercase<StringType> //转大写
+Lowercase<StringType> //转小写
+Capitalize<StringType> //首字母大写
+Uncapitalize<StringType>//首字母小写
+```
+
+至此，这部分的内容就学完啦~可以摸会鱼了。
+
+
+
+持续更新中～欢迎关注我的掘金和github，觉得不错的话，记得给我的项目🌟 一下哦～
