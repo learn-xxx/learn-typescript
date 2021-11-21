@@ -23,6 +23,8 @@
 /* _____________ 你的代码 _____________ */
 
 type TupleToObject<T extends readonly any[]> = {
+  //obj keyof
+  //array T[number]
   [key in T[number]]: key;
 };
 
