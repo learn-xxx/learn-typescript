@@ -1,0 +1,25 @@
+"use strict";
+/*
+  3060 - Unshift
+  -------
+  by jiangshan (@jiangshanmeta) #简单 #array
+  
+  ### 题目
+  
+  实现类型版本的 ```Array.unshift```。
+  
+  举例，
+  
+  ```typescript
+  type Result = Unshift<[1, 2], 0> // [0, 1, 2,]
+  ```
+  
+  > 在 Github 上查看：https://tsch.js.org/3060/zh-CN
+*/
+Object.defineProperty(exports, "__esModule", { value: true });
+/* _____________ 下一步 _____________ */
+/*
+  > 分享你的解答：https://tsch.js.org/3060/answer/zh-CN
+  > 查看解答：https://tsch.js.org/3060/solutions
+  > 更多题目：https://tsch.js.org/zh-CN
+*/
