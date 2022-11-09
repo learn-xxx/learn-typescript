@@ -18,3 +18,5 @@ const p1: Person = {
 const arr: readonly number[] = [1, 2, 3]
 // 类型“readonly number[]”中的索引签名仅允许读取
 // arr[0] = 0
+
+
